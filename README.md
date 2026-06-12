@@ -2,6 +2,8 @@
 
 A Flask-based web application that analyzes scientific research papers using Google's Gemini AI. Simply upload any research PDF to instantly generate structured summaries, technical breakdowns, interactive study flashcards, and access a contextual chat assistant.
 
+**Live Link:** [https://ai-research-paper-intelligence.onrender.com](https://ai-research-paper-intelligence.onrender.com)
+
 ---
 
 ## ✨ Features
