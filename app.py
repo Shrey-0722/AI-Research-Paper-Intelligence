@@ -365,17 +365,18 @@ def upload_file():
             model = genai.GenerativeModel('gemini-2.0-flash')
             
             prompt = f"""
-            Analyze the following research paper text. Produce a structured analysis in JSON format.
-            CRITICAL FOR SPEED: Keep all text explanations, methodologies, and results extremely concise, crisp, and limited to 1-3 sentences maximum.
- 
+            Analyze the following research paper text. Produce a structured, detailed analysis in JSON format.
+            The summary (abstract) should be a comprehensive, high-quality, 1-2 page equivalent summary (around 400-600 words) formatted in markdown/paragraphs. 
+            All other descriptions (methodology, results, limitations) should be thoroughly explained in detail rather than being kept extremely short.
+
             Produce a JSON containing:
             1. title: The title of the paper.
             2. authors: The authors of the paper (comma-separated string).
-            3. abstract: A very brief summary of the paper.
-            4. key_findings: A list of 3-4 bullet points of the main contributions.
-            5. methodology: A 1-2 sentence description of the methodology.
-            6. results: A 1-2 sentence summary of the experimental results.
-            7. limitations: A 1-2 sentence summary of limitations.
+            3. abstract: A detailed, comprehensive summary of the research paper (around 400-600 words, structured with multiple paragraphs using double newlines for spacing). It must explain the background, key problem addressed, proposed method, findings, and overall significance.
+            4. key_findings: A list of 4-6 detailed bullet points outlining the main contributions and takeaways.
+            5. methodology: A detailed, thorough description of the methodology, techniques, and datasets used.
+            6. results: A detailed, thorough summary of the experimental results, metrics, and comparisons.
+            7. limitations: A detailed, thorough summary of limitations, potential biases, and future work.
             8. flashcards: A list of exactly 10 interactive study flashcards. Each flashcard should be an object with:
                - front: A question or key concept.
                - back: The answer or explanation.

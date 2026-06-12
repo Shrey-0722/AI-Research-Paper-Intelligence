@@ -235,7 +235,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Abstract
-        paperAbstract.textContent = data.abstract || 'No abstract available.';
+        paperAbstract.innerHTML = parseMarkdown(data.abstract || 'No abstract available.');
 
         // Key Takeaways
         paperTakeaways.innerHTML = '';
@@ -250,9 +250,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Technical Breakdown Details
-        paperMethodology.textContent = data.methodology || 'Methodology description not found.';
-        paperResults.textContent = data.results || 'Experimental results not found.';
-        paperLimitations.textContent = data.limitations || 'Limitations discussion not found.';
+        paperMethodology.innerHTML = parseMarkdown(data.methodology || 'Methodology description not found.');
+        paperResults.innerHTML = parseMarkdown(data.results || 'Experimental results not found.');
+        paperLimitations.innerHTML = parseMarkdown(data.limitations || 'Limitations discussion not found.');
 
         // Flashcard Badges and setup
         flashcardsCount.textContent = currentFlashcards.length;
