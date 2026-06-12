@@ -75,20 +75,5 @@ http://127.0.0.1:5000
 
 ---
 
-## 📤 Git Repository Guidelines (What to Upload)
-
-We have configured a `.gitignore` file to ensure sensitive keys and cache files are not pushed to GitHub:
-*   **Files to upload/commit**: `app.py`, `requirements.txt`, `README.md`, `.gitignore`, `templates/`, `static/`
-*   **DO NOT upload/commit**: `.env` (API Keys), `venv/` (Local environment), `uploads/` (User session text cache files)
-
----
-
-## 🔒 Security & Privacy
-
-*   Uploaded PDF files are parsed in memory and deleted from server storage immediately after extraction.
-*   Parsed text contents are temporarily stored in `uploads/<session_id>.txt` only to power the contextual chat assistant, protecting document confidentiality.
-
----
-
 ## 👤 Author
-Shrey Gamit   
+Shrey Gamit 
