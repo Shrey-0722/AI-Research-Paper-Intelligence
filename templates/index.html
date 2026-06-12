@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Research Paper Intelligence</title>
+    <meta name="description" content="An advanced research paper analyzer powered by Google Gemini AI. Upload scientific PDFs for instant structured summaries, flashcards, and interactive Q&A.">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Background Elements -->
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="grid-overlay"></div>
+
+    <header class="app-header">
+        <div class="container header-container">
+            <div class="header-actions">
+                <button id="btn-new-upload" class="btn btn-secondary hidden">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> Upload New Paper
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- 1. Upload View -->
+        <section id="upload-section" class="upload-section">
+            <div class="hero-text text-center">
+                <h2>AI Research Paper <span>Intelligence</span></h2>
+            </div>
+
+            <div class="upload-container glass">
+                <div id="drop-zone" class="drop-zone">
+                    <div class="drop-zone-content">
+                        <div class="upload-icon">
+                            <i class="fa-solid fa-file-pdf"></i>
+                        </div>
+                        <h3>Drag & drop your research paper here</h3>
+                        <p class="file-limits">All PDF file sizes supported</p>
+                        <span class="btn-divider">or</span>
+                        <label for="file-input" class="btn btn-primary">
+                            Browse Files
+                        </label>
+                        <input type="file" id="file-input" accept=".pdf" class="hidden">
+                    </div>
+                </div>
+
+                <div id="file-preview-container" class="file-preview-container hidden">
+                    <div class="file-info-card">
+                        <i class="fa-solid fa-file-pdf pdf-file-icon"></i>
+                        <div class="file-details">
+                            <h4 id="preview-filename">paper_name.pdf</h4>
+                            <p id="preview-filesize">2.4 MB</p>
+                        </div>
+                        <button id="btn-remove-file" class="btn-icon" title="Remove file">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+
+                    <div class="action-bar">
+                        <button id="btn-analyze" class="btn btn-primary btn-large btn-glow">
+                            <i class="fa-solid fa-brain"></i> Analyze with Gemini AI
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. Loading View -->
+        <section id="loading-section" class="loading-section glass hidden">
+            <div class="loader-content text-center">
+                <div class="spinner-container">
+                    <div class="pulse-ring"></div>
+                    <i class="fa-solid fa-brain loader-icon"></i>
+                </div>
+                <h2>Analyzing Research Paper</h2>
+                <p>Google Gemini is reading and synthesizing the document...</p>
+                
+                <div class="progress-steps">
+                    <div class="step active" id="step-1">
+                        <span class="step-num"><i class="fa-solid fa-check"></i></span>
+                        <span class="step-label">Extracting text content</span>
+                    </div>
+                    <div class="step" id="step-2">
+                        <span class="step-num">2</span>
+                        <span class="step-label">Synthesizing findings</span>
+                    </div>
+                    <div class="step" id="step-3">
+                        <span class="step-num">3</span>
+                        <span class="step-label">Generating flashcards</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. Dashboard View -->
+        <section id="dashboard-section" class="dashboard-section hidden">
+            <div class="dashboard-grid">
+                <!-- Sidebar Navigation -->
+                <aside class="dashboard-sidebar glass">
+                    <div class="paper-meta-widget">
+                        <span class="widget-label">Active Document</span>
+                        <h3 id="sidebar-paper-title" class="paper-title-clip">Paper Title Loading...</h3>
+                        <p id="sidebar-paper-authors" class="paper-authors-clip">Authors</p>
+                        <div id="fallback-badge" class="badge-fallback hidden">
+                            <i class="fa-solid fa-triangle-exclamation"></i> Local Fallback Active
+                        </div>
+                    </div>
+                    <nav class="dashboard-nav">
+                        <button class="nav-item active" data-tab="tab-overview" id="nav-overview">
+                            <i class="fa-solid fa-file-lines"></i> Overview
+                        </button>
+                        <button class="nav-item" data-tab="tab-methodology" id="nav-methodology">
+                            <i class="fa-solid fa-microscope"></i> Tech Breakdown
+                        </button>
+                        <button class="nav-item" data-tab="tab-flashcards" id="nav-flashcards">
+                            <i class="fa-solid fa-clone"></i> Flashcards <span class="badge" id="flashcards-count">0</span>
+                        </button>
+                        <button class="nav-item" data-tab="tab-chat" id="nav-chat">
+                            <i class="fa-solid fa-comments"></i> Chat Assistant
+                        </button>
+                    </nav>
+                    
+                    <div class="sidebar-footer">
+                        <button id="btn-download-md" class="btn btn-outline btn-full-width">
+                            <i class="fa-solid fa-download"></i> Save Summary (MD)
+                        </button>
+                    </div>
+                </aside>
+
+                <!-- Main Content Area -->
+                <div class="dashboard-content">
+                    
+                    <!-- TAB 1: OVERVIEW -->
+                    <div id="tab-overview" class="tab-pane active">
+                        <div class="content-header">
+                            <h2 id="paper-display-title">Research Paper Analysis</h2>
+                            <p class="authors-list"><i class="fa-solid fa-users"></i> <span id="paper-display-authors">Authors</span></p>
+                        </div>
+                        
+                        <div class="summary-grid">
+                            <!-- Abstract Card -->
+                            <div class="summary-card glass span-2">
+                                <div class="card-header">
+                                    <div class="card-title-icon"><i class="fa-solid fa-quote-left"></i></div>
+                                    <h3>Abstract / Summary</h3>
+                                </div>
+                                <div class="card-body">
+                                    <p id="paper-abstract" class="lead-text">Abstract details go here...</p>
+                                </div>
+                            </div>
+
+                            <!-- Key Takeaways -->
+                            <div class="summary-card glass span-2">
+                                <div class="card-header">
+                                    <div class="card-title-icon"><i class="fa-solid fa-star"></i></div>
+                                    <h3>Key Takeaways & Contributions</h3>
+                                </div>
+                                <div class="card-body">
+                                    <ul id="paper-takeaways" class="bullet-list">
+                                        <!-- Key findings will be injected here -->
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 2: METHODOLOGY & RESULTS -->
+                    <div id="tab-methodology" class="tab-pane">
+                        <div class="content-header">
+                            <h2>Technical Breakdown</h2>
+                            <p>Deep-dive into the methodology, experimental results, and limitations.</p>
+                        </div>
+
+                        <div class="detail-cards-container">
+                            <!-- Methodology -->
+                            <div class="detail-card glass">
+                                <div class="card-header">
+                                    <div class="card-title-icon blue"><i class="fa-solid fa-gears"></i></div>
+                                    <h3>Methodology & Approach</h3>
+                                </div>
+                                <div class="card-body">
+                                    <p id="paper-methodology">Methodology details go here...</p>
+                                </div>
+                            </div>
+
+                            <!-- Results -->
+                            <div class="detail-card glass">
+                                <div class="card-header">
+                                    <div class="card-title-icon green"><i class="fa-solid fa-chart-line"></i></div>
+                                    <h3>Results & Findings</h3>
+                                </div>
+                                <div class="card-body">
+                                    <p id="paper-results">Experimental results details go here...</p>
+                                </div>
+                            </div>
+
+                            <!-- Limitations -->
+                            <div class="detail-card glass">
+                                <div class="card-header">
+                                    <div class="card-title-icon red"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                                    <h3>Limitations & Future Work</h3>
+                                </div>
+                                <div class="card-body">
+                                    <p id="paper-limitations">Limitations details go here...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 3: FLASHCARDS -->
+                    <div id="tab-flashcards" class="tab-pane">
+                        <div class="content-header flex-header">
+                            <div>
+                                <h2>Interactive Flashcards</h2>
+                                <p>Test your understanding of the paper's key concepts and findings.</p>
+                            </div>
+                            <div class="flashcards-score">
+                                <span class="score-label">Mastery:</span>
+                                <span class="score-value" id="flashcard-score">0 / 0</span>
+                            </div>
+                        </div>
+
+                        <div class="flashcard-filter">
+                            <label for="flashcard-section-select"><i class="fa-solid fa-layer-group"></i> Study Section:</label>
+                            <select id="flashcard-section-select">
+                                <option value="all">All Sections (10 Cards)</option>
+                                <option value="Abstract">Abstract & Core Summary</option>
+                                <option value="Introduction">Introduction & Context</option>
+                                <option value="Methodology">Methodology & Approach</option>
+                                <option value="Results">Experimental Results</option>
+                                <option value="Limitations">Limitations & Future Scope</option>
+                            </select>
+                        </div>
+
+                        <div class="flashcard-widget-container">
+                            <div class="flashcard-container">
+                                <div class="flashcard glass" id="flashcard">
+                                    <div class="flashcard-front">
+                                        <div class="flashcard-indicator-container">
+                                            <span class="flashcard-indicator">Question</span>
+                                            <span class="flashcard-section-badge badge-Abstract" id="flashcard-section-badge-front">Abstract</span>
+                                        </div>
+                                        <div class="flashcard-text-container">
+                                            <p id="flashcard-question-text">Question text goes here?</p>
+                                        </div>
+                                        <div class="flashcard-hint">
+                                            <i class="fa-solid fa-rotate"></i> Click card to reveal answer
+                                        </div>
+                                    </div>
+                                    <div class="flashcard-back">
+                                        <div class="flashcard-indicator-container">
+                                            <span class="flashcard-indicator answer">Answer</span>
+                                            <span class="flashcard-section-badge badge-Abstract" id="flashcard-section-badge-back">Abstract</span>
+                                        </div>
+                                        <div class="flashcard-text-container">
+                                            <p id="flashcard-answer-text">Answer text goes here.</p>
+                                        </div>
+                                        <div class="flashcard-hint">
+                                            <i class="fa-solid fa-rotate"></i> Click card to view question
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flashcard-controls">
+                                <button id="btn-prev-card" class="btn btn-secondary">
+                                    <i class="fa-solid fa-arrow-left"></i> Previous
+                                </button>
+                                <button id="btn-mastered-card" class="btn btn-success">
+                                    <i class="fa-solid fa-check-double"></i> Got It!
+                                </button>
+                                <span class="flashcard-progress-text" id="flashcard-index-text">Card 1 of 8</span>
+                                <button id="btn-next-card" class="btn btn-secondary">
+                                    Next <i class="fa-solid fa-arrow-right"></i>
+                                </button>
+                            </div>
+                            
+                            <div class="flashcard-actions-extra text-center">
+                                <button id="btn-reset-flashcards" class="btn btn-link">
+                                    <i class="fa-solid fa-rotate-right"></i> Reset Mastery Progress
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 4: CHAT ASSISTANT -->
+                    <div id="tab-chat" class="tab-pane">
+                        <div class="content-header">
+                            <h2>AI Research Assistant</h2>
+                            <p>Ask deep questions, clarify complex math, or request summaries of specific sections.</p>
+                        </div>
+
+                        <div class="chat-container glass">
+                            <!-- Chat History -->
+                            <div class="chat-messages" id="chat-messages-container">
+                                <div class="message assistant">
+                                    <div class="message-avatar">
+                                        <i class="fa-solid fa-robot"></i>
+                                    </div>
+                                    <div class="message-content">
+                                        <p>Hello! I've read and analyzed this paper. Ask me anything about its methodology, results, contributions, or how it relates to other work!</p>
+                                        
+                                        <div class="suggested-prompts-container">
+                                            <p class="suggestions-title">Try asking:</p>
+                                            <div class="suggestions-grid">
+                                                <button class="suggested-prompt-btn">What is the primary contribution of this paper?</button>
+                                                <button class="suggested-prompt-btn">Explain the methodology used in simple terms.</button>
+                                                <button class="suggested-prompt-btn">What datasets or experiments did they run?</button>
+                                                <button class="suggested-prompt-btn">What are the main limitations identified by the authors?</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Chat Input -->
+                            <div class="chat-input-bar">
+                                <textarea id="chat-input" placeholder="Ask a question about this paper..." rows="1"></textarea>
+                                <button id="btn-send-chat" class="btn btn-primary btn-icon-only" title="Send message">
+                                    <i class="fa-solid fa-paper-plane"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+    </main>
+
+
+
+    <!-- App Logic JS -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

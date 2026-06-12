@@ -1,0 +1,23 @@
+# Python virtual environment
+venv/
+.venv/
+env/
+/env/
+/venv/
+
+# Environment variables (sensitive API keys)
+.env
+
+# User uploads & session text logs
+uploads/*
+!uploads/.gitkeep
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# OS files
+.DS_Store
+Thumbs.db
