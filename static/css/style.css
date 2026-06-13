@@ -742,9 +742,27 @@ main.container {
 }
 .lead-text {
     font-size: 0.98rem;
-    line-height: 1.7;
+    line-height: 1.75;
     color: var(--text-primary);
     text-align: justify;
+}
+.card-body p, .lead-text p {
+    margin-bottom: 16px;
+}
+.card-body p:last-child, .lead-text p:last-child {
+    margin-bottom: 0;
+}
+.card-body h3, .lead-text h3 {
+    font-size: 1.12rem;
+    color: var(--secondary);
+    margin-top: 24px;
+    margin-bottom: 12px;
+    font-weight: 600;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding-bottom: 6px;
+}
+.card-body h3:first-child, .lead-text h3:first-child {
+    margin-top: 0;
 }
 .bullet-list {
     list-style: none;
@@ -804,6 +822,7 @@ main.container {
 }
 .flashcard-container {
     perspective: 1000px;
+    -webkit-perspective: 1000px;
     height: 320px;
     margin-bottom: 24px;
 }
@@ -812,12 +831,15 @@ main.container {
     height: 100%;
     position: relative;
     transform-style: preserve-3d;
+    -webkit-transform-style: preserve-3d;
     transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    -webkit-transition: -webkit-transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
     border-radius: var(--radius-lg);
 }
 .flashcard.flipped {
     transform: rotateY(180deg);
+    -webkit-transform: rotateY(180deg);
 }
 .flashcard-front, .flashcard-back {
     position: absolute;
@@ -830,15 +852,19 @@ main.container {
     flex-direction: column;
     justify-content: space-between;
     border-radius: var(--radius-lg);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
 }
 .flashcard-front {
     background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%);
     border: 1px solid var(--border-color);
+    transform: rotateY(0deg) translateZ(1px);
+    -webkit-transform: rotateY(0deg) translateZ(1px);
 }
 .flashcard-back {
     background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(15, 23, 42, 0.95) 100%);
     border: 1px solid var(--primary-glow);
-    transform: rotateY(180deg);
+    transform: rotateY(180deg) translateZ(1px);
+    -webkit-transform: rotateY(180deg) translateZ(1px);
 }
 .flashcard-indicator {
     align-self: flex-start;
@@ -1217,3 +1243,5 @@ footer.app-footer {
     background: rgba(248, 113, 113, 0.15);
     border-color: rgba(248, 113, 113, 0.25);
 }
+
+

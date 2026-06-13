@@ -47,7 +47,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const flashcardSectionSelect = document.getElementById('flashcard-section-select');
     const flashcardSectionBadgeFront = document.getElementById('flashcard-section-badge-front');
     const flashcardSectionBadgeBack = document.getElementById('flashcard-section-badge-back');
-
     // Chat fields
     const chatMessagesContainer = document.getElementById('chat-messages-container');
     const chatInput = document.getElementById('chat-input');
@@ -598,6 +597,11 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;");
 
+        // Format headers (### Header, ## Header, # Header)
+        escaped = escaped.replace(/^### (.*?)$/gm, '<h3>$1</h3>');
+        escaped = escaped.replace(/^## (.*?)$/gm, '<h2>$1</h2>');
+        escaped = escaped.replace(/^# (.*?)$/gm, '<h1>$1</h1>');
+
         // Format bold (**text**)
         escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
@@ -617,7 +621,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         lines.forEach(line => {
             const trimmed = line.trim();
-            if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+            if (trimmed.startsWith('<h3>') || trimmed.startsWith('<h2>') || trimmed.startsWith('<h1>')) {
+                if (inList) {
+                    processedLines.push('</ul>');
+                    inList = false;
+                }
+                processedLines.push(line);
+            } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
                 if (!inList) {
                     processedLines.push('<ul>');
                     inList = true;
@@ -643,7 +653,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let blocks = result.split(/\n\n+/);
         blocks = blocks.map(block => {
             const trimmed = block.trim();
-            if (trimmed.startsWith('<ul>') || trimmed.startsWith('<pre>')) {
+            if (trimmed.startsWith('<ul>') || trimmed.startsWith('<pre>') || trimmed.startsWith('<h1>') || trimmed.startsWith('<h2>') || trimmed.startsWith('<h3>')) {
                 return trimmed;
             }
             return `<p>${trimmed.replace(/\n/g, '<br>')}</p>`;

@@ -55,6 +55,97 @@ def call_gemini_with_retry(func, *args, **kwargs):
             time.sleep(delay)
             delay *= 2
 
+def extract_section_by_headers(text, section_keywords, next_section_keywords):
+    """
+    Finds a section in the text starting with a header containing `section_keywords`
+    and ending with a header containing `next_section_keywords`.
+    """
+    lines = text.split('\n')
+    start_idx = -1
+    end_idx = -1
+    
+    for idx, line in enumerate(lines):
+        line_clean = line.strip().lower()
+        if len(line_clean) < 60 and any(kw in line_clean for kw in section_keywords):
+            if re.match(r'^(?:[0-9viixcls]+\.?|abstract|introduction|methodology|experiments|results|conclusion|limitations|discussion)\b', line_clean):
+                start_idx = idx
+                break
+                
+    if start_idx != -1:
+        for idx in range(start_idx + 1, len(lines)):
+            line_clean = lines[idx].strip().lower()
+            if len(line_clean) < 60 and any(kw in line_clean for kw in next_section_keywords):
+                if re.match(r'^(?:[0-9viixcls]+\.?|abstract|introduction|methodology|experiments|results|conclusion|limitations|discussion|references|acknowledgments)\b', line_clean):
+                    end_idx = idx
+                    break
+        if end_idx != -1:
+            return "\n".join(lines[start_idx+1:end_idx]).strip()
+        else:
+            return "\n".join(lines[start_idx+1:start_idx+80]).strip()
+            
+    return None
+
+def extract_sentences_by_keywords(text, keywords, max_sentences=6):
+    """
+    Scans the text for sentences matching specified keywords, returning a merged block.
+    """
+    sentences = re.split(r'\.\s+', text)
+    matching_sentences = []
+    
+    for sentence in sentences:
+        s_clean = sentence.strip().replace('\n', ' ')
+        s_lower = s_clean.lower()
+        if 35 < len(s_clean) < 300:
+            if not any(noise in s_lower for noise in ['http', 'doi', 'vol.', 'no.', 'pages']):
+                score = sum(1 for kw in keywords if kw in s_lower)
+                if score > 0:
+                    matching_sentences.append((score, s_clean))
+                    
+    # Sort by score descending
+    matching_sentences.sort(key=lambda x: x[0], reverse=True)
+    
+    result_sentences = []
+    for score, sentence in matching_sentences[:max_sentences]:
+        if not sentence.endswith('.'):
+            sentence += "."
+        result_sentences.append(sentence)
+        
+    return " ".join(result_sentences)
+
+def extract_relevant_fallback_sentence(text, keywords, default_text):
+    """
+    Finds the single best sentence matching a set of keywords in the text.
+    If no sentence matches, returns the first clean sentence in the text block.
+    """
+    sentences = re.split(r'\.\s+', text)
+    best_sentence = ""
+    best_score = 0
+    
+    for sentence in sentences:
+        s_clean = sentence.lower().replace('\n', ' ').strip()
+        if 35 < len(s_clean) < 250:
+            if not any(noise in s_clean for noise in ['http', 'doi', 'figure', 'table', 'vol.', 'no.', 'pages']):
+                score = sum(1 for kw in keywords if kw in s_clean)
+                if score > best_score:
+                    best_score = score
+                    best_sentence = sentence.strip().replace('\n', ' ')
+                    if not best_sentence.endswith('.'):
+                        best_sentence += "."
+                
+    if best_score > 0:
+        return best_sentence
+        
+    # Backup: get first clean sentence of the text block
+    for sentence in sentences:
+        s_clean = sentence.strip().replace('\n', ' ')
+        if 35 < len(s_clean) < 250:
+            if not any(noise in s_clean.lower() for noise in ['http', 'doi', 'figure', 'table', 'vol.', 'no.', 'pages']):
+                if not s_clean.endswith('.'):
+                    s_clean += "."
+                return s_clean
+                
+    return default_text
+
 def fallback_parse_paper(text, filename):
     """
     Parses a research paper locally using heuristic text extraction 
@@ -65,7 +156,6 @@ def fallback_parse_paper(text, filename):
     
     # 1. Title Heuristic
     title = filename.replace('.pdf', '').replace('_', ' ').title()
-    # Try to find a better title in the first few lines
     for line in lines[:8]:
         if len(line) > 15 and len(line) < 100 and not any(kw in line.lower() for kw in ['abstract', 'introduction', 'author', 'vol', 'no', 'issn', 'http', 'page', 'cite']):
             title = line
@@ -75,7 +165,6 @@ def fallback_parse_paper(text, filename):
     authors = "Unknown Authors"
     for line in lines[1:10]:
         if any(kw in line.lower() for kw in ['department', 'university', 'email', '@', 'institute', 'school']):
-            # Usually authors are in the lines before this
             try:
                 idx = lines.index(line)
                 if idx > 0:
@@ -87,21 +176,21 @@ def fallback_parse_paper(text, filename):
                 pass
     
     # 3. Abstract Heuristic (richer and longer)
-    abstract = "Abstract not found."
-    abstract_match = re.search(r'(?:abstract|summary)[:\s]+([\s\S]+?)(?:1\.?\s+introduction|introduction|key\s*words|index\s*terms)', text, re.IGNORECASE)
-    if abstract_match:
-        abstract_raw = abstract_match.group(1).strip()
-        sentences = [s.strip().replace('\n', ' ') for s in re.split(r'\.\s+', abstract_raw) if len(s.strip()) > 15]
-        abstract = ". ".join(sentences[:5]) + "."
-    else:
-        # Fallback to first few sentences
-        sentences = [s.strip().replace('\n', ' ') for s in re.split(r'\.\s+', text) if len(s.strip()) > 25]
-        if len(sentences) > 0:
-            abstract = ". ".join(sentences[:5]) + "."
+    abstract = extract_section_by_headers(text, ["abstract", "summary"], ["introduction", "background"])
+    if not abstract:
+        abstract_match = re.search(r'(?:abstract|summary)[:\s]+([\s\S]+?)(?:1\.?\s+introduction|introduction|key\s*words|index\s*terms)', text, re.IGNORECASE)
+        if abstract_match:
+            abstract = abstract_match.group(1).strip()
+    if not abstract:
+        sentences = [s.strip().replace('\n', ' ') for s in re.split(r'\.\s+', text) if len(s.strip()) > 20]
+        abstract = " ".join(sentences[:8]) + "."
         
+    abstract = re.sub(r'\s+', ' ', abstract)[:1200]
+    if not abstract.endswith('.'):
+        abstract += '.'
+
     # 4. Key Findings Heuristic (dynamic and non-generic)
     findings = []
-    # Search for sentences with contribution keywords first
     for sentence in re.split(r'\.\s+', text):
         s_lower = sentence.lower()
         if any(kw in s_lower for kw in ['we contribute', 'our contribution', 'we present', 'we propose', 'results show', 'shows that', 'outperforms', 'achieves', 'we discuss', 'we show', 'highlights', 'focuses on']):
@@ -111,10 +200,8 @@ def fallback_parse_paper(text, filename):
             if len(findings) >= 5:
                 break
                 
-    # If we still don't have enough, pull informative sentences from the document
     if len(findings) < 4:
         all_sentences = [s.strip().replace('\n', ' ') for s in re.split(r'\.\s+', text) if len(s.strip()) > 50 and len(s.strip()) < 180]
-        # filter out generic headings or citations
         filtered_sentences = [s for s in all_sentences if not any(kw in s.lower() for kw in ['http', 'doi', 'figure', 'table', 'vol.', 'no.', 'pages'])]
         for fs in filtered_sentences:
             if fs + "." not in findings:
@@ -122,139 +209,147 @@ def fallback_parse_paper(text, filename):
             if len(findings) >= 5:
                 break
                 
-    # Ultimate fallback if text is extremely short
     if not findings:
         findings = [
-            "Analyzed the uploaded text content and extracted main talking points.",
-            "Discussed core concepts and topics presented by the author.",
-            "Synthesized key highlights for further review and study."
+            f"Presents a structured approach to analyzing research paper metrics for '{title}'.",
+            "Discusses methodology and experimental design proposed by the authors.",
+            "Synthesized key scientific outcomes and results for performance review."
         ]
         
     # 5. Methodology Heuristic (dynamic)
-    methodology = ""
-    method_match = re.search(r'(?:methodology|methods|experimental setup|proposed approach)[:\s]+([\s\S]+?)(?:results|evaluation|discussion)', text, re.IGNORECASE)
-    if method_match:
-        method_text = method_match.group(1).strip()
-        sentences = re.split(r'\.\s+', method_text)
-        methodology = ". ".join([s.strip().replace('\n', ' ') for s in sentences[:3]]) + "."
-    else:
-        # Search for methodology / action keywords
-        method_sentences = []
-        for sentence in re.split(r'\.\s+', text):
-            s_lower = sentence.lower()
-            if any(kw in s_lower for kw in ['we design', 'we implement', 'the method consists', 'our architecture', 'framework', 'using', 'first', 'then', 'process', 'step', 'strategy']):
-                cleaned = sentence.strip().replace('\n', ' ')
-                if 50 < len(cleaned) < 200:
-                    method_sentences.append(cleaned + ".")
-                if len(method_sentences) >= 2:
-                    break
-        if method_sentences:
-            methodology = " ".join(method_sentences)
-        else:
-            methodology = "The proposed approach utilizes structured text analysis and contextual parsing of the document content to organize the author's arguments."
+    methodology = extract_section_by_headers(text, ["methodology", "methods", "proposed", "approach", "system", "architecture", "model"], ["results", "evaluation", "experiments", "experimental"])
+    if not methodology:
+        method_match = re.search(r'(?:methodology|methods|experimental setup|proposed approach)[:\s]+([\s\S]+?)(?:results|evaluation|discussion)', text, re.IGNORECASE)
+        if method_match:
+            methodology = method_match.group(1).strip()
+    if not methodology:
+        methodology = extract_sentences_by_keywords(text, ['courses', 'opportunities', 'learn', 'explore', 'methods', 'training', 'skills', 'platforms', 'tools', 'study', 'we use', 'we implement', 'framework', 'approach', 'design'])
+    if not methodology:
+        methodology = f"The proposed approach utilizes structured system design to investigate the research objectives of '{title}'."
+        
+    methodology = re.sub(r'\s+', ' ', methodology)[:1200]
 
     # 6. Results Heuristic (dynamic)
-    results = ""
-    results_match = re.search(r'(?:results|evaluation|experimental results)[:\s]+([\s\S]+?)(?:limitations|conclusion|future work)', text, re.IGNORECASE)
-    if results_match:
-        results_text = results_match.group(1).strip()
-        sentences = re.split(r'\.\s+', results_text)
-        results = ". ".join([s.strip().replace('\n', ' ') for s in sentences[:3]]) + "."
-    else:
-        results_sentences = []
-        for sentence in re.split(r'\.\s+', text):
-            s_lower = sentence.lower()
-            if any(kw in s_lower for kw in ['experiment results', 'achieved an accuracy', 'outperformed', 'table', 'figure show', 'empirical evaluation', 'show that', 'we found', 'demonstrates', 'observed']):
-                cleaned = sentence.strip().replace('\n', ' ')
-                if 50 < len(cleaned) < 200:
-                    results_sentences.append(cleaned + ".")
-                if len(results_sentences) >= 2:
-                    break
-        if results_sentences:
-            results = " ".join(results_sentences)
-        else:
-            results = "Analysis of the document indicates structured support for the core findings and thematic arguments presented by the author."
+    results = extract_section_by_headers(text, ["results", "evaluation", "experiments", "experimental", "findings"], ["limitations", "discussion", "conclusion", "future work", "references"])
+    if not results:
+        results_match = re.search(r'(?:results|evaluation|experimental results)[:\s]+([\s\S]+?)(?:limitations|conclusion|future work)', text, re.IGNORECASE)
+        if results_match:
+            results = results_match.group(1).strip()
+    if not results:
+        results = extract_sentences_by_keywords(text, ['promotes', 'seeks to', 'offers', 'helps', 'provides', 'news', 'insights', 'community', 'developments', 'evaluation', 'results', 'outperform', 'accuracy', 'empirical', 'findings'])
+    if not results:
+        results = "Experimental results demonstrate performance improvements and validate the research questions evaluated in the study."
+        
+    results = re.sub(r'\s+', ' ', results)[:1200]
 
     # 7. Limitations Heuristic (dynamic)
-    limitations = ""
-    lim_match = re.search(r'(?:limitations|future work|conclusions)[:\s]+([\s\S]+?)(?:references|acknowledgments)', text, re.IGNORECASE)
-    if lim_match:
-        lim_text = lim_match.group(1).strip()
-        sentences = re.split(r'\.\s+', lim_text)
-        limitations = ". ".join([s.strip().replace('\n', ' ') for s in sentences[:3]]) + "."
-    else:
-        lim_sentences = []
-        for sentence in re.split(r'\.\s+', text):
-            s_lower = sentence.lower()
-            if any(kw in s_lower for kw in ['limitation', 'future work', 'drawback', 'scope of', 'we hope to', 'challenge', 'constraint', 'difficult to']):
-                cleaned = sentence.strip().replace('\n', ' ')
-                if 50 < len(cleaned) < 200:
-                    lim_sentences.append(cleaned + ".")
-                if len(lim_sentences) >= 2:
-                    break
-        if lim_sentences:
-            limitations = " ".join(lim_sentences)
-        else:
-            limitations = "Future work would benefit from expanded evaluation sets, addressing constraints related to domain specificity and context scope."
+    limitations = extract_section_by_headers(text, ["limitations", "discussion", "conclusion", "future work"], ["references", "acknowledgements", "appendix"])
+    if not limitations:
+        lim_match = re.search(r'(?:limitations|future work|conclusions)[:\s]+([\s\S]+?)(?:references|acknowledgments)', text, re.IGNORECASE)
+        if lim_match:
+            limitations = lim_match.group(1).strip()
+    if not limitations:
+        limitations = extract_sentences_by_keywords(text, ['note', 'need to', 'rules', 'guidelines', 'limits', 'challenges', 'restricted', 'free account', 'limitation', 'drawback', 'scope', 'future work', 'future research', 'bottleneck', 'constraint'])
+    if not limitations:
+        limitations = "Future work includes expanding evaluation parameters and addressing constraints related to execution context scope."
+        
+    limitations = re.sub(r'\s+', ' ', limitations)[:1200]
 
-    # 8. Flashcards (updated with dynamic metadata)
-    flashcards = [
+    # 8. Flashcards (dynamically generated with matching answers)
+    flashcard_templates = [
         {
-            "front": "What is the primary objective of this research paper?",
-            "back": f"To investigate and address key challenges related to '{title}'.",
-            "section": "Abstract"
+            "section": "Abstract",
+            "front": f"What is the primary theme or research objective discussed in the abstract of '{title}'?",
+            "keywords": ["objective", "aim", "purpose", "we study", "we analyze", "focuses on", "this paper presents", "investigate"],
+            "fallback_ans": f"To investigate and address key challenges related to '{title}'."
         },
         {
-            "front": "What methodology or approach did the authors adopt?",
-            "back": methodology[:180] + "..." if len(methodology) > 180 else methodology,
-            "section": "Methodology"
+            "section": "Abstract",
+            "front": "What core problem or challenge do the authors identify in the abstract?",
+            "keywords": ["problem", "challenge", "limitation of", "difficulty", "issue", "bottleneck", "drawback", "inefficient"],
+            "fallback_ans": f"Addressing key efficiency or quality constraints observed in the study of {title}."
         },
         {
-            "front": "What were the main experimental results or findings?",
-            "back": results[:180] + "..." if len(results) > 180 else results,
-            "section": "Results"
+            "section": "Introduction",
+            "front": "How is the background context or state of the art introduced in the paper?",
+            "keywords": ["prior work", "existing methods", "background", "literature", "historically", "state of the art", "standards"],
+            "fallback_ans": f"Providing a review of current benchmarks and methodologies within the scope of {title}."
         },
         {
-            "front": "What limitations or areas of future work did the authors highlight?",
-            "back": limitations[:180] + "..." if len(limitations) > 180 else limitations,
-            "section": "Limitations"
+            "section": "Introduction",
+            "front": f"What is one of the primary motivations for this research on '{title}'?",
+            "keywords": ["motivated by", "motivation", "unaddressed", "poor performance", "crucial need", "lack of", "requirements"],
+            "fallback_ans": "Resolving open limitations and improving execution efficiency or outcomes."
         },
         {
-            "front": "What is the core contribution of this work?",
-            "back": findings[0] if len(findings) > 0 else "Developing a validated framework to improve performance in this domain.",
-            "section": "Methodology"
+            "section": "Methodology",
+            "front": "What methodology, architecture, or overall approach is adopted in this research?",
+            "keywords": ["we propose", "proposed architecture", "framework consists", "design", "methodology", "pipeline", "approach"],
+            "fallback_ans": "Developing a structured evaluation and design methodology for the proposed framework."
         },
         {
-            "front": "What is the overarching theme described in the abstract?",
-            "back": abstract[:180] + "..." if len(abstract) > 180 else abstract,
-            "section": "Abstract"
+            "section": "Methodology",
+            "front": "What is a key technical contribution or step in the methodology?",
+            "keywords": ["contribution", "novel step", "algorithm", "specifically we", "optimization", "technique", "implementation"],
+            "fallback_ans": "Developing a validated framework to improve performance in this domain."
         },
         {
-            "front": "What key problem is this research trying to solve?",
-            "back": f"Resolving open limitations and improving execution efficiency or outcomes in the domain of {title}.",
-            "section": "Introduction"
+            "section": "Results",
+            "front": "What were the main experimental results or empirical findings?",
+            "keywords": ["empirical results", "experimental results", "evaluation shows", "outperforms", "we find that", "accuracy", "performance"],
+            "fallback_ans": "The empirical evaluation demonstrates improved outcomes and baseline results."
         },
         {
-            "front": "Which specific area of study or domain does this paper target?",
-            "back": f"Scientific research and applications relating to {title}.",
-            "section": "Introduction"
+            "section": "Results",
+            "front": "What key metric, comparison, or quantitative observation is noted in the results?",
+            "keywords": ["metric", "table", "compared to", "improvement", "percentage", "accuracy of", "baseline", "outperformed"],
+            "fallback_ans": "Demonstrating baseline improvements and baseline performance gains."
         },
         {
-            "front": "Why are the experimental findings in this paper significant?",
-            "back": f"They provide empirical evidence and baseline comparisons supporting the proposed method's efficiency.",
-            "section": "Results"
+            "section": "Limitations",
+            "front": "What limitations or scope boundaries did the authors identify?",
+            "keywords": ["limitation", "drawback", "scope", "does not address", "bottleneck", "constraints", "bias", "limitations"],
+            "fallback_ans": "Future work would benefit from expanded evaluation sets and addressing context scope limitations."
         },
         {
-            "front": "What is a secondary contribution or takeaway highlighted in the study?",
-            "back": findings[1] if len(findings) > 1 else "Establishing structured experimental benchmarks for future research.",
-            "section": "Limitations"
+            "section": "Limitations",
+            "front": "What secondary takeaway or area of future work is proposed?",
+            "keywords": ["future work", "we plan to", "extension", "could be applied", "future research", "investigate further"],
+            "fallback_ans": "Expanding the evaluation parameters and exploring further structural enhancements."
         }
     ]
+
+    flashcards = []
+    for temp in flashcard_templates:
+        search_context = text
+        if temp["section"] == "Abstract" and abstract:
+            search_context = abstract
+        elif temp["section"] == "Methodology" and methodology:
+            search_context = methodology
+        elif temp["section"] == "Results" and results:
+            search_context = results
+        elif temp["section"] == "Limitations" and limitations:
+            search_context = limitations
+            
+        ans = extract_relevant_fallback_sentence(search_context, temp["keywords"], temp["fallback_ans"])
+        flashcards.append({
+            "front": temp["front"],
+            "back": ans,
+            "section": temp["section"]
+        })
     
+    overall_summary = f"### 1. Executive Summary\n\n{abstract}\n\n"
+    if methodology:
+        overall_summary += f"### 2. Methodology & Approach\n\n{methodology}\n\n"
+    if results:
+        overall_summary += f"### 3. Experimental Results & Findings\n\n{results}\n\n"
+    if limitations:
+        overall_summary += f"### 4. Scope, Limitations & Future Work\n\n{limitations}\n\n"
+
     return {
         "title": title,
         "authors": authors,
-        "abstract": abstract,
+        "abstract": overall_summary,
         "key_findings": findings[:4],
         "methodology": methodology,
         "results": results,
@@ -263,12 +358,30 @@ def fallback_parse_paper(text, filename):
         "fallback": True
     }
 
-def fallback_chat(paper_text, user_message):
+def fallback_chat(paper_text, user_message, paper_data=None):
     """
-    A smart local fallback chatbot that searches the paper for keywords 
-    matching the user's message and returns the context.
+    A smart local fallback chatbot that routes high-level questions to the parsed
+    sections (abstract, methodology, results, limitations) if present, or performs
+    a sentence keyword search for specific queries.
     """
-    user_message_clean = re.sub(r'[^\w\s]', '', user_message.lower())
+    msg_clean = user_message.lower()
+    
+    # 1. Intent routing for general section queries
+    if paper_data:
+        if any(kw in msg_clean for kw in ["abstract", "summary", "overview", "what is this paper", "about this paper"]):
+            return f"### Summary & Abstract\n\n{paper_data.get('abstract', 'No summary available.')}"
+            
+        if any(kw in msg_clean for kw in ["methodology", "method", "approach", "architecture", "how does it work", "pipeline", "technical breakdown"]):
+            return f"### Technical Breakdown (Methodology)\n\n{paper_data.get('methodology', 'No methodology details available.')}"
+            
+        if any(kw in msg_clean for kw in ["results", "evaluation", "experiments", "performance", "metrics"]):
+            return f"### Experimental Results\n\n{paper_data.get('results', 'No results details available.')}"
+            
+        if any(kw in msg_clean for kw in ["limitations", "weakness", "drawback", "future work", "conclusion"]):
+            return f"### Limitations & Future Work\n\n{paper_data.get('limitations', 'No limitations details available.')}"
+
+    # 2. General keyword search fallback
+    user_message_clean = re.sub(r'[^\w\s]', '', msg_clean)
     keywords = [w for w in user_message_clean.split() if len(w) > 3]
     
     if not keywords:
@@ -279,15 +392,15 @@ def fallback_chat(paper_text, user_message):
     
     for sentence in sentences:
         s_clean = sentence.lower().replace('\n', ' ')
-        score = sum(1 for kw in keywords if kw in s_clean)
-        if score > 0:
-            matching_sentences.append((score, sentence.strip().replace('\n', ' ') + "."))
+        if 40 < len(s_clean) < 300:
+            score = sum(1 for kw in keywords if kw in s_clean)
+            if score > 0:
+                matching_sentences.append((score, sentence.strip().replace('\n', ' ') + "."))
             
     # Sort by score descending
     matching_sentences.sort(key=lambda x: x[0], reverse=True)
     
     if matching_sentences:
-        # Take the top 3 matches
         top_matches = [m[1] for m in matching_sentences[:3]]
         reply = "**(Local Fallback Chat Mode)** Based on your query, here are the most relevant sections found in the paper:\n\n"
         for idx, match in enumerate(top_matches):
@@ -365,21 +478,23 @@ def upload_file():
             model = genai.GenerativeModel('gemini-2.0-flash')
             
             prompt = f"""
-            Analyze the following research paper text. Produce a structured, detailed analysis in JSON format.
-            The summary (abstract) should be a comprehensive, high-quality, 1-2 page equivalent summary (around 400-600 words) formatted in markdown/paragraphs. 
+            Analyze the following research paper text. Produce a structured, extremely detailed analysis in JSON format.
+            The summary (abstract) should be a highly comprehensive, detailed, and high-quality 1-2 page equivalent overall summary of the content (around 800-1200 words) structured into thematic sections using markdown headers and formatted in paragraphs.
             All other descriptions (methodology, results, limitations) should be thoroughly explained in detail rather than being kept extremely short.
 
             Produce a JSON containing:
             1. title: The title of the paper.
             2. authors: The authors of the paper (comma-separated string).
-            3. abstract: A detailed, comprehensive summary of the research paper (around 400-600 words, structured with multiple paragraphs using double newlines for spacing). It must explain the background, key problem addressed, proposed method, findings, and overall significance.
+            3. abstract: A detailed, highly comprehensive 1-2 page overall summary of the entire research paper (around 800-1200 words). The summary MUST be structured into detailed thematic sections using markdown headers (e.g., "### 1. Executive Summary", "### 2. Core Methodology & Approach", "### 3. Experimental Setup & Key Results", "### 4. Scope, Limitations & Future Work"). It must thoroughly explain the background/context, proposed methodology/framework, experimental setups, core findings, results, and overall scientific significance. Use double newlines for paragraph breaks.
             4. key_findings: A list of 4-6 detailed bullet points outlining the main contributions and takeaways.
             5. methodology: A detailed, thorough description of the methodology, techniques, and datasets used.
             6. results: A detailed, thorough summary of the experimental results, metrics, and comparisons.
             7. limitations: A detailed, thorough summary of limitations, potential biases, and future work.
-            8. flashcards: A list of exactly 10 interactive study flashcards. Each flashcard should be an object with:
-               - front: A question or key concept.
-               - back: The answer or explanation.
+            8. flashcards: A list of exactly 10 interactive study flashcards.
+               CRITICAL REQUIREMENT: These flashcards MUST be generated strictly and exclusively based on the specific scientific content, actual findings, metrics, datasets, and methodologies described in the provided research paper PDF text. Do NOT generate generic or templated questions and answers. Make sure they reference concrete facts, definitions, or evaluation results directly from the text.
+               Each flashcard should be an object with:
+               - front: A specific question or key concept directly from this paper (e.g., "What dataset was used to evaluate model X?", "What is the key optimization technique proposed?").
+               - back: A detailed, accurate, and concise answer directly supported by the text of the paper.
                - section: The paper section this card focuses on (must be exactly one of: "Abstract", "Introduction", "Methodology", "Results", "Limitations").
                Provide exactly 2 flashcards for each of the 5 sections (Abstract, Introduction, Methodology, Results, Limitations).
 
@@ -417,6 +532,14 @@ def upload_file():
             analysis_data['paper_id'] = paper_id
             analysis_data['truncated'] = truncated
             
+            # Save parsed analysis to json file
+            json_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{paper_id}_analysis.json")
+            try:
+                with open(json_path, 'w', encoding='utf-8') as f:
+                    json.dump(analysis_data, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                logger.error(f"Failed to save analysis json: {e}")
+
             # Clean up the PDF file to save space (keep the text file for Q&A)
             try:
                 os.remove(pdf_path)
@@ -431,6 +554,15 @@ def upload_file():
                 fallback_data = fallback_parse_paper(text_content, file.filename)
                 fallback_data['paper_id'] = paper_id
                 fallback_data['truncated'] = False
+                
+                # Save parsed fallback analysis to json file
+                json_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{paper_id}_analysis.json")
+                try:
+                    with open(json_path, 'w', encoding='utf-8') as f:
+                        json.dump(fallback_data, f, ensure_ascii=False, indent=2)
+                except Exception as e:
+                    logger.error(f"Failed to save fallback analysis json: {e}")
+
                 return jsonify(fallback_data)
             except Exception as fe:
                 logger.error(f"Fallback parsing failed: {fe}")
@@ -462,6 +594,16 @@ def chat():
         # Load the full paper content
         with open(txt_path, 'r', encoding='utf-8') as f:
             paper_text = f.read()
+            
+        # Try to load parsed analysis data
+        paper_data = None
+        json_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{paper_id}_analysis.json")
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, 'r', encoding='utf-8') as f:
+                    paper_data = json.load(f)
+            except Exception as e:
+                logger.error(f"Failed to load analysis json: {e}")
             
         # Truncate context if it's too large for chat safety (keep first 40k words)
         words = paper_text.split()
@@ -512,7 +654,7 @@ def chat():
     except (exceptions.ResourceExhausted, exceptions.ServiceUnavailable) as e:
         logger.warning(f"Gemini API issue ({type(e).__name__}) during chat. Falling back to local search chat.")
         try:
-            fallback_response = fallback_chat(paper_text, user_message)
+            fallback_response = fallback_chat(paper_text, user_message, paper_data)
             return jsonify({
                 "response": fallback_response
             })
@@ -522,6 +664,5 @@ def chat():
     except Exception as e:
         logger.exception("Error during Q&A chat")
         return jsonify({"error": str(e)}), 500
-
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
